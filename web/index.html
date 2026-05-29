@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mengban Skin 批量转换</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Mengban Skin Converter</p>
+          <h1>把宠物皮肤资源批量转成 <span>.mengban-skin</span></h1>
+          <p class="lede">直接拖入文件、文件夹或压缩包。页面会自动配对每组 <code>pet.json</code> 和 <code>spritesheet.webp</code>，并生成可下载的皮肤文件。</p>
+        </div>
+        <div class="format-sample" aria-label="输入文件示例">
+          <div class="sample-row json">
+            <span class="file-icon">{}</span>
+            <span>pet.json</span>
+          </div>
+          <div class="sample-row image">
+            <span class="file-icon grid"></span>
+            <span>spritesheet.webp</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="tool-panel">
+        <div id="dropZone" class="drop-zone" tabindex="0">
+          <input id="fileInput" type="file" multiple accept=".json,.webp,.zip,application/zip" webkitdirectory>
+          <input id="plainFileInput" type="file" multiple accept=".json,.webp,.zip,application/zip">
+          <div class="drop-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img">
+              <path d="M12 3v11m0-11 4.2 4.2M12 3 7.8 7.2M4 14.5V18a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+            </svg>
+          </div>
+          <h2>上传资源</h2>
+          <p>支持多个散文件、整个文件夹、或包含多个皮肤目录的 <code>.zip</code>。</p>
+          <div class="drop-actions">
+            <button id="chooseFilesButton" type="button">选择文件</button>
+            <button id="chooseFolderButton" class="secondary" type="button">选择文件夹</button>
+          </div>
+        </div>
+
+        <div class="control-strip">
+          <label class="toggle">
+            <input id="overwriteNames" type="checkbox" checked>
+            <span>同名输出自动编号</span>
+          </label>
+          <button id="clearButton" class="ghost" type="button">清空</button>
+          <button id="convertButton" type="button" disabled>开始转换</button>
+        </div>
+
+        <div class="summary-grid" aria-live="polite">
+          <div>
+            <span id="skinCount">0</span>
+            <p>可转换</p>
+          </div>
+          <div>
+            <span id="fileCount">0</span>
+            <p>已读取文件</p>
+          </div>
+          <div>
+            <span id="issueCount">0</span>
+            <p>待处理问题</p>
+          </div>
+        </div>
+
+        <section class="results-section">
+          <div class="section-heading">
+            <h2>转换队列</h2>
+            <p id="statusText">等待上传资源</p>
+          </div>
+          <div id="resultsList" class="results-list empty">
+            <div class="empty-state">
+              <strong>还没有皮肤资源</strong>
+              <span>每个目录至少需要一个 <code>pet.json</code> 和一个 WebP 图。</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <template id="resultTemplate">
+      <article class="result-card">
+        <div>
+          <div class="result-title"></div>
+          <div class="result-meta"></div>
+        </div>
+        <div class="result-status"></div>
+      </article>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

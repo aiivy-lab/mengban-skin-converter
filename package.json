@@ -1,0 +1,19 @@
+{
+  "name": "mengban-skin-converter",
+  "version": "1.0.0",
+  "description": "Batch convert pet.json and WebP pet skins into .mengban-skin packages.",
+  "type": "module",
+  "bin": {
+    "mengban-skin": "./bin/mengban-skin.js"
+  },
+  "scripts": {
+    "start": "node ./bin/mengban-skin.js",
+    "convert": "node ./bin/mengban-skin.js",
+    "check": "node ./bin/mengban-skin.js --help"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
