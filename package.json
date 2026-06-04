@@ -1,7 +1,7 @@
 {
   "name": "mengban-skin-converter",
   "version": "1.0.0",
-  "description": "Batch convert pet.json and WebP pet skins into .mengban-skin packages.",
+  "description": "Batch convert skin JSON and WebP/PNG pet skins into .mengban-skin packages.",
   "type": "module",
   "bin": {
     "mengban-skin": "./bin/mengban-skin.js"

@@ -96,21 +96,24 @@ async function readPickedFiles(fileList) {
 
 async function analyzeFiles(files) {
   const byPath = new Map(files.map((file) => [normalizePath(file.path).toLowerCase(), file]))
-  const petFiles = files.filter((file) => basename(file.path).toLowerCase() === 'pet.json')
+  const jsonFiles = files.filter((file) => basename(file.path).toLowerCase().endsWith('.json'))
   const jobs = []
   const issues = []
 
-  for (const petFile of petFiles) {
+  for (const petFile of jsonFiles) {
     try {
       const petJson = JSON.parse(decodeUtf8(petFile.bytes))
-      const baseDir = dirname(petFile.path)
-      const webpFile = findSpritesheetFile({ petJson, baseDir, files, byPath })
-      const skinId = petJson.id || basename(baseDir) || 'pet-skin'
 
-      if (!webpFile) {
+      const baseDir = dirname(petFile.path)
+      const imageFile = findImageFile({ petJson, petJsonPath: petFile.path, baseDir, files, byPath })
+      if (!looksLikeSkinJson(petJson, petFile.path) && !isStrongImageMatch({ petJson, petJsonPath: petFile.path, imageFile, baseDir })) continue
+
+      const skinId = getSkinId(petJson, basename(baseDir) || basename(petFile.path, '.json') || 'pet-skin')
+
+      if (!imageFile) {
         issues.push({
           title: skinId,
-          message: `${petFile.path} 没有找到 WebP。已尝试 pet.json 的 spritesheetPath、spritesheet.webp、skin.webp。`
+          message: `${petFile.path} 没有找到图片。已尝试 JSON 内的图片路径、spritesheet/skin WebP 或 PNG、同目录唯一图片、同名或同 id 图片。`
         })
         continue
       }
@@ -120,32 +123,64 @@ async function analyzeFiles(files) {
         outputName: `${sanitizeFileStem(skinId)}.mengban-skin`,
         petJson,
         petPath: petFile.path,
-        webpPath: webpFile.path,
-        webpBytes: webpFile.bytes
+        imagePath: imageFile.path,
+        imageBytes: imageFile.bytes
       })
     } catch (error) {
-      issues.push({ title: petFile.path, message: `pet.json 解析失败：${error.message}` })
+      issues.push({ title: petFile.path, message: `JSON 解析失败：${error.message}` })
     }
   }
 
-  if (petFiles.length === 0 && files.length > 0) {
-    issues.push({ title: '没有找到 pet.json', message: '请上传包含 pet.json 和 spritesheet.webp 的文件夹或压缩包。' })
+  if (jsonFiles.length === 0 && files.length > 0) {
+    issues.push({ title: '没有找到 JSON', message: '请上传包含皮肤 JSON 和 WebP/PNG 图的文件夹或压缩包。' })
+  } else if (jobs.length === 0 && issues.length === 0 && files.length > 0) {
+    issues.push({ title: '没有可转换资源', message: '已读取 JSON，但没有识别到皮肤描述或可配对的图片。' })
   }
 
   return { jobs, issues }
 }
 
-function findSpritesheetFile({ petJson, baseDir, files, byPath }) {
-  const candidates = [petJson?.spritesheetPath, 'spritesheet.webp', 'skin.webp'].filter(Boolean)
+function findImageFile({ petJson, petJsonPath, baseDir, files, byPath }) {
+  const candidates = getSpritesheetPathCandidates(petJson)
   for (const candidate of candidates) {
     const candidatePath = normalizePath(joinPath(baseDir, candidate)).toLowerCase()
     if (byPath.has(candidatePath)) return byPath.get(candidatePath)
   }
 
-  const siblingWebps = files.filter((file) => {
-    return dirname(file.path) === baseDir && basename(file.path).toLowerCase().endsWith('.webp')
+  const siblingImages = files.filter((file) => {
+    return dirname(file.path) === baseDir && isSupportedSkinImagePath(file.path)
   })
-  return siblingWebps.length === 1 ? siblingWebps[0] : null
+  if (siblingImages.length === 1) return siblingImages[0]
+
+  const preferredStems = [
+    basename(petJsonPath, '.json'),
+    petJson?.id,
+    petJson?.name,
+    petJson?.displayName,
+    basename(baseDir)
+  ].map(normalizeMatchToken).filter(Boolean)
+
+  return siblingImages.find((file) => {
+    const imageStem = normalizeMatchToken(basename(file.path, imageExtension(file.path)))
+    return preferredStems.includes(imageStem)
+  }) || null
+}
+
+function isStrongImageMatch({ petJson, petJsonPath, imageFile, baseDir }) {
+  if (!imageFile) return false
+  for (const candidate of extractImagePathCandidates(petJson)) {
+    if (normalizePath(joinPath(baseDir, candidate)).toLowerCase() === normalizePath(imageFile.path).toLowerCase()) return true
+  }
+
+  const preferredStems = [
+    basename(petJsonPath, '.json'),
+    petJson?.id,
+    petJson?.name,
+    petJson?.displayName,
+    basename(baseDir)
+  ].map(normalizeMatchToken).filter(Boolean)
+  const imageStem = normalizeMatchToken(basename(imageFile.path, imageExtension(imageFile.path)))
+  return preferredStems.includes(imageStem)
 }
 
 async function convertAll() {
@@ -158,7 +193,7 @@ async function convertAll() {
     const outputs = []
     for (const job of state.jobs) {
       const outputName = makeOutputName(job.outputName, usedNames, elements.overwriteNames.checked)
-      const bytes = await createMengbanSkinBytes({ petJson: job.petJson, skinWebp: job.webpBytes })
+      const bytes = await createMengbanSkinBytes({ petJson: job.petJson, skinImage: job.imageBytes, imagePath: job.imagePath })
       outputs.push({ name: outputName, bytes })
     }
 
@@ -180,12 +215,13 @@ async function convertAll() {
   }
 }
 
-async function createMengbanSkinBytes({ petJson, skinWebp }) {
+async function createMengbanSkinBytes({ petJson, skinImage, imagePath }) {
+  const imageName = getPackedSkinImageName(imagePath)
   const payload = encodeUtf8(JSON.stringify({
     schema: SCHEMA,
     files: {
       'pet.json': petJson,
-      'skin.webp': arrayBufferToBase64(skinWebp)
+      [imageName]: arrayBufferToBase64(skinImage)
     }
   }))
   const nonce = crypto.getRandomValues(new Uint8Array(12))
@@ -214,7 +250,7 @@ function render(doneState = null) {
   elements.resultsList.classList.toggle('empty', state.jobs.length === 0 && state.issues.length === 0)
 
   if (state.jobs.length === 0 && state.issues.length === 0) {
-    elements.resultsList.innerHTML = '<div class="empty-state"><strong>还没有皮肤资源</strong><span>每个目录至少需要一个 <code>pet.json</code> 和一个 WebP 图。</span></div>'
+    elements.resultsList.innerHTML = '<div class="empty-state"><strong>还没有皮肤资源</strong><span>每个目录至少需要一个皮肤 JSON 和一个 WebP/PNG 图。</span></div>'
     setStatus('等待上传资源')
     return
   }
@@ -222,7 +258,7 @@ function render(doneState = null) {
   for (const job of state.jobs) {
     elements.resultsList.appendChild(createResultCard({
       title: job.outputName,
-      meta: `${job.petPath} + ${job.webpPath}`,
+      meta: `${job.petPath} + ${job.imagePath}`,
       status: doneState === 'done' ? '已生成' : '就绪',
       kind: doneState === 'done' ? 'done' : 'ready'
     }))
@@ -424,7 +460,7 @@ function sanitizeFileStem(value) {
 
 function isUsefulInput(filePath) {
   const lower = filePath.toLowerCase()
-  return lower.endsWith('/pet.json') || lower === 'pet.json' || lower.endsWith('.webp') || lower.endsWith('.zip')
+  return lower.endsWith('.json') || isSupportedSkinImagePath(lower) || lower.endsWith('.zip')
 }
 
 function normalizePath(filePath) {
@@ -437,14 +473,118 @@ function dirname(filePath) {
   return index >= 0 ? normalized.slice(0, index) : ''
 }
 
-function basename(filePath) {
+function basename(filePath, extension = '') {
   const normalized = normalizePath(filePath)
   const index = normalized.lastIndexOf('/')
-  return index >= 0 ? normalized.slice(index + 1) : normalized
+  const name = index >= 0 ? normalized.slice(index + 1) : normalized
+  return extension && name.toLowerCase().endsWith(extension.toLowerCase())
+    ? name.slice(0, -extension.length)
+    : name
 }
 
 function joinPath(...parts) {
   return normalizePath(parts.filter(Boolean).join('/'))
+}
+
+function getSkinId(petJson, fallback = 'pet-skin') {
+  return petJson?.id || petJson?.name || petJson?.displayName || fallback || 'pet-skin'
+}
+
+function getSpritesheetPathCandidates(petJson) {
+  return uniqueStrings([
+    ...extractImagePathCandidates(petJson),
+    'spritesheet.webp',
+    'skin.webp',
+    'spritesheet.png',
+    'skin.png'
+  ])
+}
+
+function extractWebpPathCandidates(value, depth = 0) {
+  return extractImagePathCandidates(value, depth)
+}
+
+function extractImagePathCandidates(value, depth = 0) {
+  if (!value || depth > 5) return []
+
+  if (typeof value === 'string') {
+    return isSupportedSkinImagePath(value) ? [value] : []
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => extractImagePathCandidates(item, depth + 1))
+  }
+
+  if (typeof value !== 'object') return []
+
+  const preferredKeys = [
+    'spritesheetPath',
+    'spriteSheetPath',
+    'spritePath',
+    'skinPath',
+    'webpPath',
+    'pngPath',
+    'imageFile',
+    'imagePath',
+    'texturePath',
+    'atlasPath',
+    'filePath',
+    'filename',
+    'file',
+    'path',
+    'image',
+    'texture',
+    'src',
+    'url'
+  ]
+  const candidates = []
+
+  for (const key of preferredKeys) {
+    candidates.push(...extractImagePathCandidates(value[key], depth + 1))
+  }
+
+  for (const [key, nested] of Object.entries(value)) {
+    if (preferredKeys.includes(key)) continue
+    candidates.push(...extractImagePathCandidates(nested, depth + 1))
+  }
+
+  return uniqueStrings(candidates)
+}
+
+function looksLikeSkinJson(value, filePath) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  if (basename(filePath).toLowerCase() === 'pet.json') return true
+  if (extractImagePathCandidates(value).length > 0) return true
+  return ['sprites', 'frames', 'animations', 'kind', 'description'].some((key) => key in value)
+}
+
+function isSupportedSkinImagePath(value) {
+  const lower = String(value || '').toLowerCase()
+  return lower.endsWith('.webp') || lower.endsWith('.png')
+}
+
+function imageExtension(value) {
+  return String(value || '').toLowerCase().endsWith('.png') ? '.png' : '.webp'
+}
+
+function getPackedSkinImageName(imagePath) {
+  return imageExtension(imagePath) === '.png' ? 'skin.png' : 'skin.webp'
+}
+
+function normalizeMatchToken(value) {
+  return String(value || '').trim().toLowerCase().replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/g, '')
+}
+
+function uniqueStrings(values) {
+  const seen = new Set()
+  const output = []
+  for (const value of values) {
+    const normalized = String(value || '').trim()
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    output.push(normalized)
+  }
+  return output
 }
 
 function encodeUtf8(value) {

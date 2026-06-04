@@ -12,24 +12,24 @@
         <div class="hero-copy">
           <p class="eyebrow">Mengban Skin Converter</p>
           <h1>把宠物皮肤资源批量转成 <span>.mengban-skin</span></h1>
-          <p class="lede">直接拖入文件、文件夹或压缩包。页面会自动配对每组 <code>pet.json</code> 和 <code>spritesheet.webp</code>，并生成可下载的皮肤文件。</p>
+          <p class="lede">直接拖入文件、文件夹或压缩包。页面会自动配对皮肤 JSON 和 WebP/PNG 贴图，并生成可下载的皮肤文件。</p>
         </div>
         <div class="format-sample" aria-label="输入文件示例">
           <div class="sample-row json">
             <span class="file-icon">{}</span>
-            <span>pet.json</span>
+            <span>skin.json</span>
           </div>
           <div class="sample-row image">
             <span class="file-icon grid"></span>
-            <span>spritesheet.webp</span>
+            <span>skin.png</span>
           </div>
         </div>
       </section>
 
       <section class="tool-panel">
         <div id="dropZone" class="drop-zone" tabindex="0">
-          <input id="fileInput" type="file" multiple accept=".json,.webp,.zip,application/zip" webkitdirectory>
-          <input id="plainFileInput" type="file" multiple accept=".json,.webp,.zip,application/zip">
+          <input id="fileInput" type="file" multiple accept=".json,.webp,.png,.zip,application/zip" webkitdirectory>
+          <input id="plainFileInput" type="file" multiple accept=".json,.webp,.png,.zip,application/zip">
           <div class="drop-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" role="img">
               <path d="M12 3v11m0-11 4.2 4.2M12 3 7.8 7.2M4 14.5V18a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
@@ -75,7 +75,7 @@
           <div id="resultsList" class="results-list empty">
             <div class="empty-state">
               <strong>还没有皮肤资源</strong>
-              <span>每个目录至少需要一个 <code>pet.json</code> 和一个 WebP 图。</span>
+              <span>每个目录至少需要一个皮肤 JSON 和一个 WebP/PNG 图。</span>
             </div>
           </div>
         </section>
